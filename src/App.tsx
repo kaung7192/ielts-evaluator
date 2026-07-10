@@ -453,13 +453,13 @@ export default function App() {
 
   // Render highlights in submission text
   const renderHighlightedText = () => {
-    if (!currentResult) return <p className="text-sm leading-relaxed text-[#555]">{submissionText}</p>;
+    if (!currentResult) return <p className="text-sm leading-relaxed text-[#555] dark:text-[#C8C6C2]">{submissionText}</p>;
     
     const text = currentResult.submissionText;
     const corrections = currentResult.corrections;
     
     if (!corrections || corrections.length === 0) {
-      return <p className="text-sm leading-relaxed text-[#555] whitespace-pre-wrap">{text}</p>;
+      return <p className="text-sm leading-relaxed text-[#555] dark:text-[#C8C6C2] whitespace-pre-wrap">{text}</p>;
     }
 
     // Sort corrections by index of appearance to avoid overlapping highlight ranges
@@ -468,7 +468,7 @@ export default function App() {
       .sort((a, b) => text.indexOf(a.originalText) - text.indexOf(b.originalText));
 
     if (sortedCorrections.length === 0) {
-      return <p className="text-sm leading-relaxed text-[#555] whitespace-pre-wrap">{text}</p>;
+      return <p className="text-sm leading-relaxed text-[#555] dark:text-[#C8C6C2] whitespace-pre-wrap">{text}</p>;
     }
 
     const elements: React.ReactNode[] = [];
@@ -487,10 +487,10 @@ export default function App() {
       const isSelected = activeCorrectionId === corr.id;
       const severityColors = 
         corr.severity === 'high' 
-          ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-900' 
+          ? 'bg-red-100 dark:bg-red-950/40 border-red-300 dark:border-red-900 text-red-900 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-900/50' 
           : corr.severity === 'medium'
-            ? 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900'
-            : 'bg-yellow-50 hover:bg-yellow-100 border-yellow-200 text-yellow-900';
+            ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-300 dark:border-amber-900 text-amber-900 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-[#C5A059]/30'
+            : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900/50 text-yellow-900 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
 
       const selectedStyles = isSelected ? 'ring-2 ring-offset-1 ring-[#C5A059] font-semibold' : '';
 
@@ -513,7 +513,7 @@ export default function App() {
       elements.push(<span key={`text-end`}>{text.substring(lastIndex)}</span>);
     }
 
-    return <p className="text-sm leading-relaxed text-[#555] whitespace-pre-wrap">{elements}</p>;
+    return <p className="text-sm leading-relaxed text-[#555] dark:text-[#C8C6C2] whitespace-pre-wrap">{elements}</p>;
   };
 
   const copyToClipboard = () => {
@@ -1321,7 +1321,107 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <>
+                {/* Stats Summary Bento Cards & Trajectory */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6 animate-fade-in">
+                  
+                  {/* Stats Overview */}
+                  <div className="lg:col-span-4 grid grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-4 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-all">
+                      <span className="text-[9px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-wider">Average Band</span>
+                      <b className="text-3xl font-serif italic text-[#C5A059] dark:text-[#D4B26F] mt-2">
+                        {(historyList.reduce((acc, item) => acc + item.overallBand, 0) / historyList.length).toFixed(1)}
+                      </b>
+                    </div>
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-4 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-all">
+                      <span className="text-[9px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-wider">Tests Run</span>
+                      <b className="text-3xl font-serif italic text-black dark:text-white mt-2">
+                        {historyList.length}
+                      </b>
+                    </div>
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-4 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-all col-span-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-wider">Activity Mix</span>
+                        <span className="text-[9px] font-mono text-[#C5A059] dark:text-[#D4B26F]">Writing / Speaking</span>
+                      </div>
+                      <div className="flex items-end justify-between mt-2">
+                        <b className="text-xl font-serif italic text-black dark:text-white">
+                          {historyList.filter(i => i.type === 'writing').length} essays / {historyList.filter(i => i.type === 'speaking').length} talks
+                        </b>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SVG Chart */}
+                  <div className="lg:col-span-8 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between min-h-[160px] hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-all">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-[9px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-widest">Score Progress Tracker</h3>
+                        <span className="text-[9px] font-mono bg-[#F0EFEC] dark:bg-[#2C2A26] px-2 py-0.5 rounded-sm uppercase text-black dark:text-white font-bold">Band 4.0 - 9.0 Trajectory</span>
+                      </div>
+                      <div className="h-24 w-full relative">
+                        <svg className="w-full h-full" viewBox="0 0 100 30" preserveAspectRatio="none">
+                          {/* Grid Lines */}
+                          <line x1="0" y1="5" x2="100" y2="5" stroke="#EBE9E4" strokeWidth="0.2" className="dark:stroke-white/5" strokeDasharray="1 1" />
+                          <line x1="0" y1="15" x2="100" y2="15" stroke="#EBE9E4" strokeWidth="0.2" className="dark:stroke-white/5" strokeDasharray="1 1" />
+                          <line x1="0" y1="25" x2="100" y2="25" stroke="#EBE9E4" strokeWidth="0.2" className="dark:stroke-white/5" strokeDasharray="1 1" />
+                          
+                          {(() => {
+                            const points = historyList
+                              .map((item, idx) => {
+                                const x = historyList.length === 1 ? 50 : (idx / (historyList.length - 1)) * 100;
+                                // Project score range 4.0 (bottom, y=26) to 9.0 (top, y=4)
+                                const scorePercentage = (item.overallBand - 4) / 5;
+                                const y = 26 - (scorePercentage * 22);
+                                return `${x},${y}`;
+                              })
+                              .join(' ');
+
+                            return (
+                              <>
+                                <polyline
+                                  fill="none"
+                                  stroke="#C5A059"
+                                  strokeWidth="1"
+                                  points={points}
+                                  className="dark:stroke-[#D4B26F] transition-all"
+                                />
+                                {historyList.map((item, idx) => {
+                                  const x = historyList.length === 1 ? 50 : (idx / (historyList.length - 1)) * 100;
+                                  const scorePercentage = (item.overallBand - 4) / 5;
+                                  const y = 26 - (scorePercentage * 22);
+                                  return (
+                                    <g key={idx} className="group/dot">
+                                      <circle
+                                        cx={x}
+                                        cy={y}
+                                        r="1.5"
+                                        className="fill-white dark:fill-[#201F1D] stroke-[#C5A059] dark:stroke-[#D4B26F] stroke-[1] cursor-pointer hover:r-2 transition-all"
+                                      />
+                                      <title>{`Test Date: ${item.timestamp} | Band Score: ${item.overallBand.toFixed(1)}`}</title>
+                                    </g>
+                                  );
+                                })}
+                              </>
+                            );
+                          })()}
+                        </svg>
+                        
+                        {/* Timeline axis */}
+                        <div className="absolute inset-x-0 bottom-0 flex justify-between text-[8px] font-mono text-[#8C8A84] dark:text-[#A6A49F] px-1 pt-1 border-t border-[#F0EFEC] dark:border-[#3C3933]">
+                          <span>Earliest</span>
+                          <span>Evaluation History Timeline</span>
+                          <span>Latest</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card List Header */}
+                <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4">Detailed Practice Log</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {historyList.map((item) => (
                   <div 
                     key={item.id}
@@ -1360,7 +1460,8 @@ export default function App() {
                   </div>
                 ))}
               </div>
-            )}
+            </>
+          )}
           </div>
         )}
 
