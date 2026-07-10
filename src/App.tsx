@@ -278,7 +278,8 @@ export default function App() {
     setCurrentResult(null);
 
     try {
-      const response = await fetch('/api/evaluate', {
+      const apiHost = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiHost}/api/evaluate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
