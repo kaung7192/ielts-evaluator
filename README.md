@@ -1,6 +1,8 @@
-# IELTS Evaluator & Feedback Engine
+# IELTS Evaluator & Feedback Engine (Frontend Client)
 
-A full-stack, AI-powered IELTS preparation tool designed to evaluate student writing and speaking submissions. Powered by the Gemini API, this tool analyzes responses against the official IELTS public band descriptors, providing detailed scores, grammatical corrections, and actionable feedback.
+This repository contains the interactive frontend single-page application for the IELTS Evaluator & Feedback Engine. It is built in React, TypeScript, and Tailwind CSS. 
+
+To protect commercial prompts, scoring configurations, and API keys for launch, the backend grading server is maintained in a separate private repository.
 
 ---
 
@@ -15,14 +17,15 @@ A full-stack, AI-powered IELTS preparation tool designed to evaluate student wri
 *   **Detailed Overall Score**: Calculates the official overall band score, rounded to the nearest half or whole band.
 *   **Actionable Corrections Matrix**: Highlights spelling, grammatical, lexical, and structural mistakes with original text, suggested corrections, explanation of rules, severity levels, and the criteria they affect.
 *   **General Feedback Lists**: Automatically compiles candidate's Strengths, Weaknesses, and clear, actionable steps for improvement.
-*   **Resilient API Backend**: Features automatic exponential backoff retries and model fallbacks (using `gemini-2.5-flash`, `gemini-3.5-flash`, and `gemini-1.5-flash`) to ensure high availability and bypass API overload.
 
 ---
 
-## Tech Stack
+## Tech Stack (Frontend)
 
-*   **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide React (for UI icons), Motion (for smooth layout animations), and Vite.
-*   **Backend**: Node.js Express server configured with the new `@google/genai` SDK and dotenv.
+*   **Framework**: React 19, TypeScript, Vite.
+*   **Styling**: Tailwind CSS.
+*   **Animations**: Motion.
+*   **Icons**: Lucide React.
 
 ---
 
@@ -46,26 +49,25 @@ Ensure you have [Node.js](https://nodejs.org/) installed (v18+ recommended).
    ```
 
 3. Configure environment variables:
-   Create a `.env` file in the root directory (based on `.env.example`) and add your Gemini API Key:
+   Create a `.env` file in the root directory and specify the URL of the running backend server:
    ```env
-   GEMINI_API_KEY=your_actual_gemini_api_key_here
+   VITE_API_URL=http://localhost:3000
    ```
 
 ### Running Locally
 
-To run the development server (which starts the Express API and Vite frontend together):
+To run the development server:
 ```bash
 npm run dev
 ```
 
-Open your browser and navigate to **[http://localhost:3000](http://localhost:3000)** to view the application.
+Open your browser and navigate to the local address shown in the terminal (usually **[http://localhost:5173](http://localhost:5173)**).
 
 ---
 
 ## How it Works
 
 1. **Submission**: The React frontend captures the IELTS writing or speaking text submission.
-2. **API Request**: The text is sent to the `/api/evaluate` endpoint on the Express server.
-3. **AI Generation**: The backend uses the Google Gen AI SDK to ask Gemini for a structured evaluation based on a certified IELTS examiner prompt.
-4. **Resiliency Layer**: If the primary Gemini model is unavailable or encounters transient 503 limits, the server waits, retries, or falls back to alternative models.
-5. **Interactive Report**: The frontend receives the structured JSON response and renders an interactive dashboard showing criteria breakdowns, color-coded corrections, strengths, weaknesses, and custom metrics (such as word count and estimated speaking time).
+2. **API Request**: The client sends the submission details to the `/api/evaluate` endpoint of the backend API specified by the `VITE_API_URL` environment variable.
+3. **AI Generation**: The private backend server handles the request, securely querying Gemini API models with custom-tailored grading prompts and schemas.
+4. **Interactive Report**: The frontend parses the structured JSON payload and renders an interactive dashboard showing criteria breakdowns, inline corrections, and advice lists.
