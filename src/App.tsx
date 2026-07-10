@@ -213,34 +213,74 @@ export default function App() {
   const [recognitionInstance, setRecognitionInstance] = useState<any>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load history from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem('ielts_eval_history');
-    if (stored) {
-      try {
-        setHistoryList(JSON.parse(stored));
-      } catch (e) {
-        console.error('Failed to parse history', e);
+  // SQLite database history loader
+  const loadHistory = async () => {
+    try {
+      const apiHost = (import.meta as any).env.VITE_API_URL || '';
+      const response = await fetch(`${apiHost}/api/evaluations`);
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryList(data);
       }
+    } catch (e) {
+      console.error('Failed to load history from database:', e);
     }
+  };
+
+  useEffect(() => {
+    loadHistory();
   }, []);
 
-  // Update localStorage when history changes
-  const saveToHistory = (newResult: EvaluationResult) => {
-    const updated = [newResult, ...historyList];
-    setHistoryList(updated);
-    localStorage.setItem('ielts_eval_history', JSON.stringify(updated));
-  };
-
-  const deleteFromHistory = (id: string, e: React.MouseEvent) => {
+  const deleteFromHistory = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = historyList.filter(item => item.id !== id);
-    setHistoryList(updated);
-    localStorage.setItem('ielts_eval_history', JSON.stringify(updated));
-    if (currentResult && currentResult.id === id) {
-      setCurrentResult(null);
+    try {
+      const apiHost = (import.meta as any).env.VITE_API_URL || '';
+      const response = await fetch(`${apiHost}/api/evaluations/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        setHistoryList(prev => prev.filter(item => item.id !== id));
+        if (currentResult && currentResult.id === id) {
+          setCurrentResult(null);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to delete history record:', e);
     }
   };
+
+  // Analytics Dashboard states
+  const [analyticsCandidate, setAnalyticsCandidate] = useState<string>('all');
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [candidatesList, setCandidatesList] = useState<string[]>([]);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState<boolean>(false);
+
+  // Fetch analytics data
+  const loadAnalytics = async (candidateFilter: string) => {
+    setIsAnalyticsLoading(true);
+    try {
+      const apiHost = (import.meta as any).env.VITE_API_URL || '';
+      const response = await fetch(`${apiHost}/api/analytics?candidate=${candidateFilter}`);
+      if (response.ok) {
+        const data = await response.json();
+        setAnalyticsData(data);
+        if (data.candidates) {
+          setCandidatesList(data.candidates);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load analytics:', e);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  };
+
+  // Reload analytics when tab switches or candidate selection changes
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      loadAnalytics(analyticsCandidate);
+    }
+  }, [activeTab, analyticsCandidate]);
 
   // Synchronize taskType options based on evaluation type
   useEffect(() => {
@@ -378,28 +418,8 @@ export default function App() {
       }
 
       const data = await response.json();
-      
-      const newReport: EvaluationResult = {
-        id: `UK-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
-        timestamp: new Date().toLocaleDateString('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        }).toUpperCase() + ' / ' + new Date().toLocaleTimeString('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit'
-        }),
-        type,
-        taskType,
-        promptText: promptText || (type === 'writing' ? 'IELTS Writing Essay' : 'IELTS Speaking cue topic'),
-        submissionText,
-        candidateName,
-        targetScore,
-        ...data
-      };
-
-      setCurrentResult(newReport);
-      saveToHistory(newReport);
+      setCurrentResult(data);
+      setHistoryList(prev => [data, ...prev]);
     } catch (e: any) {
       console.error(e);
       setErrorMsg(e.message || 'An error occurred during evaluation. Please try again.');
@@ -574,6 +594,18 @@ export default function App() {
             >
               <History className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Saved Reports ({historyList.length})</span>
+            </button>
+            <button 
+              id="tab-analytics"
+              onClick={() => setActiveTab('analytics')}
+              className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === 'analytics' 
+                  ? 'border-[#C5A059] dark:border-[#D4B26F] text-[#1A1A1A] dark:text-white bg-[#F9F8F6]/50 dark:bg-[#181715]/50' 
+                  : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Analytics</span>
             </button>
             <button 
               id="tab-rubric"
@@ -1464,6 +1496,213 @@ export default function App() {
               </div>
             </>
           )}
+          </div>
+        )}
+
+        {/* ANALYTICS TAB */}
+        {activeTab === 'analytics' && (
+          <div className="col-span-12 flex flex-col gap-6">
+            {/* Header Toolbar */}
+            <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all">
+              <div>
+                <h2 className="text-xl md:text-2xl font-serif italic mb-1 text-black dark:text-white">Practice Analytics Dashboard</h2>
+                <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs">
+                  Review aggregate statistics and student progress benchmarking from the SQLite database.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="text-xs uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] font-bold">Filter Student:</label>
+                <select 
+                  value={analyticsCandidate}
+                  onChange={(e) => setAnalyticsCandidate(e.target.value)}
+                  className="bg-[#F9F8F6] dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] text-xs font-mono px-3 py-1.5 focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] text-black dark:text-white"
+                >
+                  <option value="all">All Candidates (Global)</option>
+                  {candidatesList.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => {
+                    const headers = ['Report ID', 'Candidate Name', 'Target Score', 'Type', 'Task Type', 'Overall Band', 'Task Achievement', 'Coherence', 'Lexical', 'Grammar', 'Word Count', 'Date'];
+                    const rows = historyList
+                      .filter(h => analyticsCandidate === 'all' || h.candidateName === analyticsCandidate)
+                      .map(h => [
+                        h.id,
+                        h.candidateName,
+                        h.targetScore,
+                        h.type,
+                        h.taskType,
+                        h.overallBand,
+                        h.bandScores.taskAchievement,
+                        h.bandScores.coherenceCohesion,
+                        h.bandScores.lexicalResource,
+                        h.bandScores.grammaticalRange,
+                        h.wordCount,
+                        h.timestamp
+                      ]);
+                    const csvContent = "data:text/csv;charset=utf-8," 
+                      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", `ielts_analytics_${analyticsCandidate === 'all' ? 'all_students' : analyticsCandidate.toLowerCase().replace(/\s+/g, '_')}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-3.5 py-1.5 bg-[#1A1A1A] dark:bg-[#3C3933] text-white dark:text-[#C8C6C2] hover:bg-[#C5A059] dark:hover:bg-[#D4B26F] text-xs uppercase tracking-wider font-bold transition-all rounded-sm flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            {isAnalyticsLoading || !analyticsData ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] rounded-sm animate-pulse">
+                <div className="w-8 h-8 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin mb-4" />
+                <span className="text-xs text-[#8C8A84] uppercase tracking-widest font-mono">Compiling Statistics...</span>
+              </div>
+            ) : (
+              <>
+                {/* KPI Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all">
+                    <span className="text-[10px] tracking-[0.15em] font-bold text-[#8C8A84] dark:text-[#A6A49F] uppercase block mb-1">Average Band Score</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-serif italic font-bold text-[#C5A059] dark:text-[#D4B26F]">{analyticsData.kpis.avgOverall}</span>
+                      <span className="text-xs text-[#8C8A84] font-mono">/ 9.0 Rating</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all">
+                    <span className="text-[10px] tracking-[0.15em] font-bold text-[#8C8A84] dark:text-[#A6A49F] uppercase block mb-1">Evaluations Audited</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-mono font-bold text-black dark:text-white">{analyticsData.kpis.totalTests}</span>
+                      <span className="text-xs text-[#8C8A84] uppercase font-bold font-sans">Sessions</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all">
+                    <span className="text-[10px] tracking-[0.15em] font-bold text-[#8C8A84] dark:text-[#A6A49F] uppercase block mb-1">Mean Response Length</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-mono font-bold text-black dark:text-white">{analyticsData.kpis.avgWords}</span>
+                      <span className="text-xs text-[#8C8A84] font-sans">Words / practice</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all">
+                    <span className="text-[10px] tracking-[0.15em] font-bold text-[#8C8A84] dark:text-[#A6A49F] uppercase block mb-1">Mean Error Density</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-mono font-bold text-red-600 dark:text-red-400">{analyticsData.kpis.avgTotalErrors}</span>
+                      <span className="text-xs text-[#8C8A84] font-sans">Mistakes ({analyticsData.kpis.avgCriticalErrors} High severity)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Charts Bento Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Band Score Histogram */}
+                  <div className="lg:col-span-8 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-xs font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold">
+                        Score distribution histogram (All evaluation events)
+                      </h3>
+                      {analyticsData.distribution.length === 0 ? (
+                        <div className="text-center py-10 text-xs text-[#8C8A84]">No distribution data available. Add more evaluations.</div>
+                      ) : (
+                        <div className="h-64 flex items-end justify-between gap-2 pt-6 pb-2 px-4 border-b border-[#DEDCD7] dark:border-[#3C3933] border-l">
+                          {(() => {
+                            const maxVal = Math.max(...analyticsData.distribution.map((d: any) => d.count), 1);
+                            const targetBands = [5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
+                            return targetBands.map(bandScore => {
+                              const match = analyticsData.distribution.find((d: any) => Math.abs(d.band - bandScore) < 0.1);
+                              const val = match ? match.count : 0;
+                              const heightPct = (val / maxVal) * 80;
+                              return (
+                                <div key={bandScore} className="flex-1 flex flex-col items-center group relative">
+                                  <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black dark:bg-[#3C3933] text-white dark:text-[#C8C6C2] text-[10px] px-2 py-0.5 rounded-sm font-mono whitespace-nowrap z-10">
+                                    {val} Test{val !== 1 ? 's' : ''}
+                                  </div>
+                                  <div className="w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-t-sm overflow-hidden flex items-end h-48">
+                                    <div 
+                                      style={{ height: `${heightPct}%` }}
+                                      className="w-full bg-[#C5A059] dark:bg-[#D4B26F] hover:bg-black dark:hover:bg-white transition-all duration-300"
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono mt-2 font-bold text-[#8C8A84] dark:text-[#A6A49F]">
+                                    {bandScore.toFixed(1)}
+                                  </span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-between text-[10px] font-mono text-[#8C8A84] dark:text-[#A6A49F] mt-2 px-4">
+                      <span>Lower bands</span>
+                      <span>IELTS overall band score</span>
+                      <span>Higher bands</span>
+                    </div>
+                  </div>
+
+                  {/* Skills breakdown comparison */}
+                  <div className="lg:col-span-4 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-xs font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold">
+                        Skills profiles: Essay vs talk modalities
+                      </h3>
+                      {analyticsData.skills.length === 0 ? (
+                        <div className="text-center py-10 text-xs text-[#8C8A84]">No skill breakdown logs available.</div>
+                      ) : (
+                        <div className="space-y-6 pt-2">
+                          {analyticsData.skills.map((s: any) => (
+                            <div key={s.type} className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs uppercase tracking-widest font-bold text-black dark:text-white">
+                                  {s.type === 'writing' ? 'Writing tasks' : 'Speaking talks'}
+                                </span>
+                                <span className="text-xs font-serif italic font-bold text-[#C5A059] dark:text-[#D4B26F]">
+                                  Band Avg: {s.avgOverall}
+                                </span>
+                              </div>
+
+                              <div className="space-y-2.5 bg-[#F9F8F6] dark:bg-[#181715] p-3 border border-[#F0EFEC] dark:border-[#3C3933] rounded-sm">
+                                {[
+                                  { label: 'Task Achievement', score: s.avgTA },
+                                  { label: 'Coherence & Cohesion', score: s.avgCC },
+                                  { label: 'Lexical Resource', score: s.avgLR },
+                                  { label: 'Grammar Accuracy', score: s.avgGRA }
+                                ].map(skill => {
+                                  const widthPct = (Number(skill.score) / 9.0) * 100;
+                                  return (
+                                    <div key={skill.label} className="space-y-1">
+                                      <div className="flex justify-between text-[10px] text-[#8C8A84] dark:text-[#A6A49F]">
+                                        <span>{skill.label}</span>
+                                        <span className="font-mono font-bold text-black dark:text-white">{skill.score}</span>
+                                      </div>
+                                      <div className="h-1.5 bg-[#EAE8E3] dark:bg-[#2C2A26] rounded-full overflow-hidden">
+                                        <div 
+                                          style={{ width: `${widthPct}%` }}
+                                          className="h-full bg-[#1A1A1A] dark:bg-[#C8C6C2] rounded-full"
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
