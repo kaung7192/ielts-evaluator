@@ -367,6 +367,8 @@ export default function App() {
           taskType,
           promptText,
           submissionText,
+          candidateName,
+          targetScore,
         }),
       });
 
