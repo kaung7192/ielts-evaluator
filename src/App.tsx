@@ -30,7 +30,9 @@ import {
   ExternalLink,
   Clipboard,
   ClipboardCheck,
-  Languages
+  Languages,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface BandScores {
@@ -63,6 +65,8 @@ interface EvaluationResult {
   taskType: string;
   promptText: string;
   submissionText: string;
+  candidateName?: string;
+  targetScore?: string;
   bandScores: BandScores;
   overallBand: number;
   metricsFeedback: MetricsFeedback;
@@ -110,6 +114,43 @@ The journey was extremely special right from the start because we boarded the tr
 This journey was incredibly memorable because it was the first time I traveled to Scotland, and the contrast between the bustling city and the serene nature was absolutely breathtaking. Also, traveling by train gave us a sense of slow-paced adventure that you just can't get by flying. It felt like we were really experiencing the landscape change rather than just arriving at a destination. We hiked through beautiful glens and stayed in small villages, which created bonds between us that will last forever.`
 };
 
+const CircularScore = ({ score }: { score: number }) => {
+  const radius = 20;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (score / 9) * circumference;
+
+  return (
+    <div className="relative w-12 h-12 shrink-0 flex items-center justify-center">
+      <svg className="w-full h-full transform -rotate-90">
+        <circle 
+          cx="24" 
+          cy="24" 
+          r={radius} 
+          className="text-[#F0EFEC] dark:text-[#3C3933]" 
+          strokeWidth="3" 
+          stroke="currentColor" 
+          fill="transparent" 
+        />
+        <circle 
+          cx="24" 
+          cy="24" 
+          r={radius} 
+          className="text-[#C5A059] dark:text-[#D4B26F] transition-all duration-1000" 
+          strokeWidth="3" 
+          strokeDasharray={circumference} 
+          strokeDashoffset={strokeDashoffset} 
+          strokeLinecap="round" 
+          stroke="currentColor" 
+          fill="transparent" 
+        />
+      </svg>
+      <span className="absolute text-xs font-mono font-bold text-black dark:text-white">
+        {score.toFixed(1)}
+      </span>
+    </div>
+  );
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'evaluate' | 'history' | 'rubric'>('evaluate');
   const [type, setType] = useState<'writing' | 'speaking'>('writing');
@@ -128,6 +169,43 @@ export default function App() {
   // UI and interactions
   const [activeCorrectionId, setActiveCorrectionId] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
+
+  // Candidate Customization State
+  const [candidateName, setCandidateName] = useState<string>(() => localStorage.getItem('ielts_candidate_name') || 'Sofia G. Moretti');
+  const [targetScore, setTargetScore] = useState<string>(() => localStorage.getItem('ielts_target_score') || '8.0');
+  
+  // Writing input mode & upload details
+  const [writingInputMode, setWritingInputMode] = useState<'text' | 'upload'>('text');
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  
+  // Theme Dark Mode state
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('ielts_eval_theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  });
+
+  // Synchronize theme state with DOM
+  useEffect(() => {
+    localStorage.setItem('ielts_eval_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  // Synchronize candidate settings
+  useEffect(() => {
+    localStorage.setItem('ielts_candidate_name', candidateName);
+  }, [candidateName]);
+
+  useEffect(() => {
+    localStorage.setItem('ielts_target_score', targetScore);
+  }, [targetScore]);
   
   // Recording states
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -278,7 +356,7 @@ export default function App() {
     setCurrentResult(null);
 
     try {
-      const apiHost = import.meta.env.VITE_API_URL || '';
+      const apiHost = (import.meta as any).env.VITE_API_URL || '';
       const response = await fetch(`${apiHost}/api/evaluate`, {
         method: 'POST',
         headers: {
@@ -313,6 +391,8 @@ export default function App() {
         taskType,
         promptText: promptText || (type === 'writing' ? 'IELTS Writing Essay' : 'IELTS Speaking cue topic'),
         submissionText,
+        candidateName,
+        targetScore,
         ...data
       };
 
@@ -330,6 +410,8 @@ export default function App() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadedFileName(file.name);
+    setWritingInputMode('upload');
     readFileContent(file);
   };
 
@@ -348,6 +430,8 @@ export default function App() {
   };
 
   const loadSample = (sampleType: 'writing1' | 'writing2' | 'speaking2') => {
+    setUploadedFileName(null);
+    setWritingInputMode('text');
     if (sampleType === 'writing1') {
       setType('writing');
       setTaskType('task1');
@@ -452,53 +536,64 @@ export default function App() {
   const wordCount = submissionText.trim() === '' ? 0 : submissionText.trim().split(/\s+/).length;
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] font-sans antialiased flex flex-col justify-between selection:bg-[#C5A059]/30 selection:text-black">
+    <div className="min-h-screen bg-[#F9F8F6] dark:bg-[#181715] text-[#1A1A1A] dark:text-[#E6E5E2] font-sans antialiased flex flex-col justify-between selection:bg-[#C5A059]/30 dark:selection:bg-[#C5A059]/50 selection:text-black dark:selection:text-white transition-colors duration-200">
       {/* Platform Header */}
-      <header className="h-24 border-b border-[#DEDCD7] flex items-center justify-between px-6 md:px-12 bg-white sticky top-0 z-50">
+      <header className="h-24 border-b border-[#DEDCD7] dark:border-[#3C3933] flex items-center justify-between px-6 md:px-12 bg-white dark:bg-[#201F1D] sticky top-0 z-50 transition-colors duration-200">
         <div className="flex flex-col">
-          <span className="text-[10px] tracking-[0.2em] font-bold text-[#8C8A84] uppercase">IELTS Assessment Framework</span>
+          <span className="text-[10px] tracking-[0.2em] font-bold text-[#8C8A84] dark:text-[#A6A49F] uppercase">IELTS AI Practice Advisor</span>
           <h1 className="text-xl md:text-2xl font-serif italic font-medium tracking-tight">
-            IELTS Feedback Engine <span className="text-[#C5A059] font-sans not-italic text-xs md:text-sm font-bold bg-[#F9F8F6] border border-[#DEDCD7] px-2 py-0.5 rounded-full ml-1">v2.4</span>
+            IELTS Smart Practice AI <span className="text-[#C5A059] dark:text-[#D4B26F] font-sans not-italic text-xs md:text-sm font-bold bg-[#F9F8F6] dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] px-2 py-0.5 rounded-full ml-1">v2.4</span>
           </h1>
         </div>
         
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 md:gap-4">
-          <button 
-            id="tab-evaluate"
-            onClick={() => setActiveTab('evaluate')}
-            className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
-              activeTab === 'evaluate' 
-                ? 'border-[#C5A059] text-[#1A1A1A] bg-[#F9F8F6]/50' 
-                : 'border-transparent text-[#8C8A84] hover:text-[#1A1A1A]'
-            }`}
+        {/* Navigation Tabs & Theme Toggle */}
+        <div className="flex items-center gap-2 md:gap-6">
+          <div className="flex items-center gap-1 md:gap-4">
+            <button 
+              id="tab-evaluate"
+              onClick={() => setActiveTab('evaluate')}
+              className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === 'evaluate' 
+                  ? 'border-[#C5A059] dark:border-[#D4B26F] text-[#1A1A1A] dark:text-white bg-[#F9F8F6]/50 dark:bg-[#181715]/50' 
+                  : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">New Evaluation</span>
+            </button>
+            <button 
+              id="tab-history"
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === 'history' 
+                  ? 'border-[#C5A059] dark:border-[#D4B26F] text-[#1A1A1A] dark:text-white bg-[#F9F8F6]/50 dark:bg-[#181715]/50' 
+                  : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Saved Reports ({historyList.length})</span>
+            </button>
+            <button 
+              id="tab-rubric"
+              onClick={() => setActiveTab('rubric')}
+              className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
+                activeTab === 'rubric' 
+                  ? 'border-[#C5A059] dark:border-[#D4B26F] text-[#1A1A1A] dark:text-white bg-[#F9F8F6]/50 dark:bg-[#181715]/50' 
+                  : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Band Descriptors</span>
+            </button>
+          </div>
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+            className="p-2 border border-[#DEDCD7] dark:border-[#3C3933] text-[#8C8A84] dark:text-[#A6A49F] hover:text-black dark:hover:text-white hover:border-[#C5A059] dark:hover:border-[#D4B26F] rounded-full transition-all bg-[#F9F8F6]/50 dark:bg-[#181715]/50"
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
           >
-            <Compass className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">New Audit</span>
-          </button>
-          <button 
-            id="tab-history"
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
-              activeTab === 'history' 
-                ? 'border-[#C5A059] text-[#1A1A1A] bg-[#F9F8F6]/50' 
-                : 'border-transparent text-[#8C8A84] hover:text-[#1A1A1A]'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Portfolio ({historyList.length})</span>
-          </button>
-          <button 
-            id="tab-rubric"
-            onClick={() => setActiveTab('rubric')}
-            className={`px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all border-b-2 flex items-center gap-2 ${
-              activeTab === 'rubric' 
-                ? 'border-[#C5A059] text-[#1A1A1A] bg-[#F9F8F6]/50' 
-                : 'border-transparent text-[#8C8A84] hover:text-[#1A1A1A]'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">IELTS Rubrics</span>
+            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
           </button>
         </div>
       </header>
@@ -506,25 +601,56 @@ export default function App() {
       {/* Main Body */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-12 py-8 grid grid-cols-12 gap-8">
         
-        {/* ACTIVE AUDIT TAB */}
+        {/* ACTIVE EVALUATION TAB */}
         {activeTab === 'evaluate' && (
           <>
             {/* LEFT INPUT COLUMN */}
             <section className="col-span-12 lg:col-span-5 flex flex-col gap-6">
               
               {/* Submission Options Box */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                <h2 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4">Practice Settings</h2>
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                <h2 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4">Practice Options</h2>
                 
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-1.5">Candidate Name</label>
+                    <input 
+                      type="text"
+                      value={candidateName}
+                      onChange={(e) => setCandidateName(e.target.value)}
+                      className="w-full bg-[#F0EFEC] dark:bg-[#2C2A26] border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm"
+                      placeholder="Sofia G. Moretti"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-1.5">Target Band Score</label>
+                    <select
+                      value={targetScore}
+                      onChange={(e) => setTargetScore(e.target.value)}
+                      className="w-full bg-[#F0EFEC] dark:bg-[#2C2A26] border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm"
+                    >
+                      <option value="5.0">5.0</option>
+                      <option value="5.5">5.5</option>
+                      <option value="6.0">6.0</option>
+                      <option value="6.5">6.5</option>
+                      <option value="7.0">7.0</option>
+                      <option value="7.5">7.5</option>
+                      <option value="8.0">8.0</option>
+                      <option value="8.5">8.5</option>
+                      <option value="9.0">9.0</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   {/* Evaluation Type */}
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] mb-2">Practice Modality</label>
-                    <div className="flex bg-[#F0EFEC] p-0.5 rounded-sm">
+                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-2">Practice Mode</label>
+                    <div className="flex bg-[#F0EFEC] dark:bg-[#2C2A26] p-0.5 rounded-sm">
                       <button
                         onClick={() => setType('writing')}
                         className={`flex-1 text-center py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                          type === 'writing' ? 'bg-white shadow-sm text-black' : 'text-[#8C8A84] hover:text-[#1A1A1A]'
+                          type === 'writing' ? 'bg-white dark:bg-[#181715] shadow-sm text-black dark:text-white' : 'text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
                         }`}
                       >
                         <FileText className="w-3.5 h-3.5" />
@@ -533,7 +659,7 @@ export default function App() {
                       <button
                         onClick={() => setType('speaking')}
                         className={`flex-1 text-center py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                          type === 'speaking' ? 'bg-white shadow-sm text-black' : 'text-[#8C8A84] hover:text-[#1A1A1A]'
+                          type === 'speaking' ? 'bg-white dark:bg-[#181715] shadow-sm text-black dark:text-white' : 'text-[#8C8A84] dark:text-[#A6A49F] hover:text-[#1A1A1A] dark:hover:text-white'
                         }`}
                       >
                         <Mic className="w-3.5 h-3.5" />
@@ -544,12 +670,12 @@ export default function App() {
 
                   {/* Task Type */}
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] mb-2">Exam Section</label>
+                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-2">Test Part</label>
                     {type === 'writing' ? (
                       <select
                         value={taskType}
                         onChange={(e) => setTaskType(e.target.value)}
-                        className="w-full bg-[#F0EFEC] border border-[#DEDCD7] px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] rounded-sm"
+                        className="w-full bg-[#F0EFEC] dark:bg-[#2C2A26] border border-[#DEDCD7] dark:border-[#3C3933] text-[#1A1A1A] dark:text-white px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm"
                       >
                         <option value="task1">Academic/General Task 1</option>
                         <option value="task2">Academic/General Task 2</option>
@@ -558,7 +684,7 @@ export default function App() {
                       <select
                         value={taskType}
                         onChange={(e) => setTaskType(e.target.value)}
-                        className="w-full bg-[#F0EFEC] border border-[#DEDCD7] px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] rounded-sm"
+                        className="w-full bg-[#F0EFEC] dark:bg-[#2C2A26] border border-[#DEDCD7] dark:border-[#3C3933] text-[#1A1A1A] dark:text-white px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm"
                       >
                         <option value="part1">Part 1: Interview</option>
                         <option value="part2">Part 2: Cue Card (Long Turn)</option>
@@ -570,28 +696,28 @@ export default function App() {
 
                 {/* Sample essays presets */}
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] mb-2">Load Test Samples</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-2">Try a Sample Response</label>
                   <div className="flex flex-wrap gap-2">
                     <button 
                       onClick={() => loadSample('writing1')}
-                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] hover:bg-[#C5A059]/15 border border-[#DEDCD7] rounded-sm font-semibold transition-all ${
-                        type === 'writing' && taskType === 'task1' ? 'border-[#C5A059] bg-[#C5A059]/5' : ''
+                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] dark:bg-[#2C2A26] hover:bg-[#C5A059]/15 dark:hover:bg-[#D4B26F]/15 border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white rounded-sm font-semibold transition-all ${
+                        type === 'writing' && taskType === 'task1' ? 'border-[#C5A059] dark:border-[#D4B26F] bg-[#C5A059]/5' : ''
                       }`}
                     >
                       Writing Task 1
                     </button>
                     <button 
                       onClick={() => loadSample('writing2')}
-                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] hover:bg-[#C5A059]/15 border border-[#DEDCD7] rounded-sm font-semibold transition-all ${
-                        type === 'writing' && taskType === 'task2' ? 'border-[#C5A059] bg-[#C5A059]/5' : ''
+                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] dark:bg-[#2C2A26] hover:bg-[#C5A059]/15 dark:hover:bg-[#D4B26F]/15 border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white rounded-sm font-semibold transition-all ${
+                        type === 'writing' && taskType === 'task2' ? 'border-[#C5A059] dark:border-[#D4B26F] bg-[#C5A059]/5' : ''
                       }`}
                     >
                       Writing Task 2 (Essay)
                     </button>
                     <button 
                       onClick={() => loadSample('speaking2')}
-                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] hover:bg-[#C5A059]/15 border border-[#DEDCD7] rounded-sm font-semibold transition-all ${
-                        type === 'speaking' ? 'border-[#C5A059] bg-[#C5A059]/5' : ''
+                      className={`px-2 py-1 text-[10px] bg-[#F0EFEC] dark:bg-[#2C2A26] hover:bg-[#C5A059]/15 dark:hover:bg-[#D4B26F]/15 border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white rounded-sm font-semibold transition-all ${
+                        type === 'speaking' ? 'border-[#C5A059] dark:border-[#D4B26F] bg-[#C5A059]/5' : ''
                       }`}
                     >
                       Speaking Part 2 Cue Card
@@ -601,69 +727,119 @@ export default function App() {
               </div>
 
               {/* Input Area (Topic Prompt & Essay text or voice) */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm flex-1 flex flex-col justify-between min-h-[400px]">
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm flex-1 flex flex-col justify-between min-h-[400px] transition-all duration-200">
                 <div className="flex flex-col gap-4 flex-1">
                   
                   {/* Topic / Question Input */}
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] mb-1">
-                      IELTS Prompt / Topic Question <span className="text-[#8C8A84]/60">(Optional)</span>
+                    <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] mb-1">
+                      Test Question / Topic <span className="text-[#8C8A84]/60 dark:text-[#A6A49F]/60">(Optional)</span>
                     </label>
                     <textarea
                       value={promptText}
                       onChange={(e) => setPromptText(e.target.value)}
-                      placeholder="Paste the official exam question here to audit for Task Achievement accuracy..."
-                      className="w-full bg-[#F9F8F6] border border-[#DEDCD7] p-3 text-xs focus:outline-none focus:border-[#C5A059] rounded-sm min-h-[60px] resize-none"
+                      placeholder="Paste the official exam question topic here..."
+                      className="w-full bg-[#F9F8F6] dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white p-3 text-xs focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm min-h-[60px] resize-none"
                     />
                   </div>
 
                   {/* Submission Text or Voice Recording UI */}
                   <div className="flex-1 flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84]">
-                        {type === 'writing' ? 'Write or Paste Essay Content' : 'Speak or Paste Speaking Transcript'}
+                      <label className="block text-[10px] uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F]">
+                        {type === 'writing' ? 'Your Response Input' : 'Paste or Type Speaking Transcript'}
                       </label>
-                      <div className="flex items-center gap-4 text-[10px] font-mono text-[#8C8A84]">
+                      <div className="flex items-center gap-4 text-[10px] font-mono text-[#8C8A84] dark:text-[#A6A49F]">
                         <span>Words: {wordCount}</span>
                         {type === 'writing' && <span>(Recommended: {taskType === 'task1' ? '150+' : '250+'})</span>}
                       </div>
                     </div>
 
+                    {type === 'writing' && (
+                      <div className="flex border-b border-[#EBE9E4] dark:border-[#3C3933] mb-3">
+                        <button
+                          onClick={() => setWritingInputMode('text')}
+                          className={`pb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 ${
+                            writingInputMode === 'text'
+                              ? 'border-[#C5A059] text-black dark:text-white'
+                              : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-black dark:hover:text-white'
+                          }`}
+                        >
+                          Type Response
+                        </button>
+                        <button
+                          onClick={() => setWritingInputMode('upload')}
+                          className={`pb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider transition-all border-b-2 ${
+                            writingInputMode === 'upload'
+                              ? 'border-[#C5A059] text-black dark:text-white'
+                              : 'border-transparent text-[#8C8A84] dark:text-[#A6A49F] hover:text-black dark:hover:text-white'
+                          }`}
+                        >
+                          Upload Document
+                        </button>
+                      </div>
+                    )}
+
                     {type === 'writing' ? (
-                      <div className="relative flex-1 flex flex-col min-h-[220px]">
-                        <textarea
-                          value={submissionText}
-                          onChange={(e) => setSubmissionText(e.target.value)}
-                          placeholder="Write or paste your IELTS essay response here..."
-                          className="w-full flex-1 bg-[#F9F8F6] border border-[#DEDCD7] p-4 text-xs font-sans leading-relaxed focus:outline-none focus:border-[#C5A059] rounded-sm resize-none"
-                        />
-                        
-                        {/* Drag and Drop File Overlay Area */}
-                        <div className="mt-3 p-3 border border-dashed border-[#DEDCD7] bg-[#F9F8F6]/50 hover:bg-[#F0EFEC] text-center rounded-sm transition-all cursor-pointer relative group">
+                      writingInputMode === 'text' ? (
+                        <div className="relative flex-1 flex flex-col min-h-[220px]">
+                          <textarea
+                            value={submissionText}
+                            onChange={(e) => {
+                              setSubmissionText(e.target.value);
+                              setUploadedFileName(null);
+                            }}
+                            placeholder="Type or paste your response here..."
+                            className="w-full flex-1 bg-[#F9F8F6] dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white p-4 text-xs font-sans leading-relaxed focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm resize-none"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex flex-col justify-center items-center min-h-[220px] border-2 border-dashed border-[#C5A059]/40 dark:border-[#D4B26F]/40 bg-[#F9F8F6]/50 dark:bg-[#181715]/50 hover:bg-[#F0EFEC] dark:hover:bg-[#2C2A26] text-center rounded-sm transition-all relative p-6 cursor-pointer group">
                           <input 
                             type="file" 
                             accept=".txt,.doc,.docx"
                             onChange={handleFileUpload}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
                           />
-                          <div className="flex items-center justify-center gap-2 text-xs text-[#555]">
-                            <Upload className="w-4 h-4 text-[#C5A059]" />
-                            <span>Drag and drop a <b>.txt</b> essay file, or <b>browse</b></span>
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-[#C5A059]/10 dark:bg-[#D4B26F]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <Upload className="w-6 h-6 text-[#C5A059] dark:text-[#D4B26F]" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-black dark:text-white mb-1">
+                                {uploadedFileName ? 'Document Loaded Successfully' : 'Drag & Drop Your Document Here'}
+                              </p>
+                              <p className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F]">
+                                {uploadedFileName ? (
+                                  <span className="text-[#C5A059] dark:text-[#D4B26F] font-mono font-bold">{uploadedFileName}</span>
+                                ) : (
+                                  'Supports .txt, .doc, or .docx text files'
+                                )}
+                              </p>
+                            </div>
+                            {uploadedFileName && (
+                              <div className="mt-2 bg-[#C5A059]/15 dark:bg-[#D4B26F]/10 text-[#C5A059] dark:text-[#D4B26F] text-[9px] font-mono font-bold px-2 py-1 rounded-sm">
+                                {wordCount} Words Detected
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      )
                     ) : (
                       // Speaking Modality Input & Voice Recorder
                       <div className="flex-1 flex flex-col gap-3 min-h-[220px]">
                         <textarea
                           value={submissionText}
-                          onChange={(e) => setSubmissionText(e.target.value)}
-                          placeholder="Transcribe your speech here, or use our real-time recorder below..."
-                          className="w-full flex-1 bg-[#F9F8F6] border border-[#DEDCD7] p-4 text-xs font-sans leading-relaxed focus:outline-none focus:border-[#C5A059] rounded-sm resize-none"
+                          onChange={(e) => {
+                            setSubmissionText(e.target.value);
+                            setUploadedFileName(null);
+                          }}
+                          placeholder="Type your speech transcript here, or use our voice recorder below..."
+                          className="w-full flex-1 bg-[#F9F8F6] dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] text-black dark:text-white p-4 text-xs font-sans leading-relaxed focus:outline-none focus:border-[#C5A059] dark:focus:border-[#D4B26F] rounded-sm resize-none"
                         />
                         
                         {/* Interactive Voice Recorder */}
-                        <div className="p-4 border border-[#DEDCD7] bg-[#F0EFEC]/40 rounded-sm flex items-center justify-between gap-4">
+                        <div className="p-4 border border-[#DEDCD7] dark:border-[#3C3933] bg-[#F0EFEC]/40 dark:bg-[#2C2A26]/40 rounded-sm flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
                             <button
                               onClick={isRecording ? stopRecording : startRecording}
@@ -677,19 +853,37 @@ export default function App() {
                               {isRecording ? <Square className="w-5 h-5 fill-white" /> : <Mic className="w-5 h-5" />}
                             </button>
                             <div>
-                              <p className="text-xs font-bold text-black">{isRecording ? 'Recording active...' : 'In-App Voice Practice'}</p>
-                              <p className="text-[10px] text-[#8C8A84]">
-                                {isRecording ? 'Transcribing speech live...' : 'Click to speak and auto-transcribe'}
-                              </p>
+                              <p className="text-xs font-bold text-black dark:text-white">{isRecording ? 'Recording voice...' : 'Voice Practice Recorder'}</p>
+                              {isRecording ? (
+                                <div className="flex items-center gap-0.5 mt-1.5 h-5">
+                                  {[...Array(15)].map((_, i) => {
+                                    const heights = [10, 18, 14, 8, 20, 12, 16, 6, 14, 10, 18, 8, 12, 16, 10];
+                                    return (
+                                      <div 
+                                        key={i} 
+                                        className="w-[2.5px] bg-red-500 dark:bg-red-400 rounded-full animate-sound-wave origin-bottom" 
+                                        style={{ 
+                                          height: `${heights[i % heights.length]}px`, 
+                                          animationDelay: `${i * 0.08}s` 
+                                        }} 
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F]">
+                                  Click to record your voice
+                                </p>
+                              )}
                             </div>
                           </div>
                           
                           {/* Timer and visual feedback */}
                           <div className="text-right">
-                            <span className="font-mono text-sm font-bold bg-[#EBE9E4] px-3 py-1.5 rounded-sm shadow-inner text-black">
+                            <span className="font-mono text-sm font-bold bg-[#EBE9E4] dark:bg-[#3C3933] px-3 py-1.5 rounded-sm shadow-inner text-black dark:text-white">
                               {formatTime(recordingSeconds)}
                             </span>
-                            <p className="text-[9px] text-[#8C8A84] uppercase tracking-wider mt-1">Suggested: 2:00 mins</p>
+                            <p className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider mt-1">Target: 2:00 mins</p>
                           </div>
                         </div>
                       </div>
@@ -699,7 +893,7 @@ export default function App() {
 
                 {/* Errors display */}
                 {errorMsg && (
-                  <div className="my-4 p-3 bg-red-50 border border-red-200 text-red-900 text-xs rounded-sm flex items-start gap-2">
+                  <div className="my-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200 text-xs rounded-sm flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                     <span>{errorMsg}</span>
                   </div>
@@ -711,40 +905,44 @@ export default function App() {
                   disabled={isEvaluating}
                   className={`mt-6 w-full py-4 text-xs uppercase tracking-[0.25em] font-bold border transition-all flex items-center justify-center gap-2 ${
                     isEvaluating 
-                      ? 'bg-white/50 text-[#8C8A84] border-[#DEDCD7] cursor-wait' 
-                      : 'bg-[#1A1A1A] hover:bg-[#2A2A2A] text-white border-[#1A1A1A]'
+                      ? 'bg-white/50 dark:bg-[#201F1D]/50 text-[#8C8A84] dark:text-[#A6A49F] border-[#DEDCD7] dark:border-[#3C3933] cursor-wait' 
+                      : 'bg-[#1A1A1A] dark:bg-[#D4B26F] hover:bg-[#2A2A2A] dark:hover:bg-[#c3a160] text-white dark:text-[#181715] border-[#1A1A1A] dark:border-[#D4B26F]'
                   }`}
                 >
                   {isEvaluating ? (
                     <>
                       <span className="w-4 h-4 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin"></span>
-                      Auditing IELTS Submission Matrix...
+                      Evaluating your response...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 text-[#C5A059]" />
-                      Run Diagnostic Evaluation
+                      <Sparkles className="w-4 h-4 text-[#C5A059] dark:text-[#181715]" />
+                      Get AI Score & Feedback
                     </>
                   )}
                 </button>
               </div>
 
               {/* Candidate Info Card */}
-              <div className="bg-white border border-[#DEDCD7] p-5 rounded-sm shadow-sm">
-                <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-3">Candidate Dossier</h3>
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm transition-all">
+                <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-3">Candidate Profile</h3>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div>
-                    <span className="text-[9px] text-[#8C8A84] uppercase block tracking-wider">Candidate</span>
-                    <b className="text-[#1A1A1A] block truncate">{CANDIDATE_NAME}</b>
+                    <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase block tracking-wider">Candidate</span>
+                    <b className="text-[#1A1A1A] dark:text-white block truncate">
+                      {currentResult?.candidateName || candidateName}
+                    </b>
                   </div>
                   <div>
-                    <span className="text-[9px] text-[#8C8A84] uppercase block tracking-wider">Target score</span>
-                    <b className="text-[#1A1A1A] block">{CANDIDATE_TARGET} Overall</b>
+                    <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase block tracking-wider">Target score</span>
+                    <b className="text-[#1A1A1A] dark:text-white block">
+                      {currentResult?.targetScore || targetScore} Overall
+                    </b>
                   </div>
                   <div>
-                    <span className="text-[9px] text-[#8C8A84] uppercase block tracking-wider">Examiner mode</span>
-                    <b className="text-[#C5A059] block flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" /> Certified
+                    <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase block tracking-wider">Evaluation Mode</span>
+                    <b className="text-[#C5A059] dark:text-[#D4B26F] block flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> AI Standard
                     </b>
                   </div>
                 </div>
@@ -755,46 +953,99 @@ export default function App() {
             <section className="col-span-12 lg:col-span-7 flex flex-col gap-6">
               
               {!currentResult && !isEvaluating && (
-                <div className="bg-white border border-[#DEDCD7] p-12 rounded-sm text-center flex flex-col items-center justify-center min-h-[600px] bg-gradient-to-br from-white to-[#F9F8F6]">
-                  <Layers className="w-16 h-16 text-[#C5A059] mb-4 opacity-70 stroke-[1.2]" />
-                  <h3 className="text-2xl font-serif italic mb-2">No Audited Data Generated</h3>
-                  <p className="text-[#8C8A84] text-xs max-w-md mx-auto leading-relaxed mb-6">
-                    Enter your writing essay or speaking transcript, or load one of our official test presets on the left, and trigger the Diagnostic Auditor to compile detailed performance stats.
+                <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-12 rounded-sm text-center flex flex-col items-center justify-center min-h-[600px] bg-gradient-to-br from-white dark:from-[#201F1D] to-[#F9F8F6] dark:to-[#181715]">
+                  <Layers className="w-16 h-16 text-[#C5A059] dark:text-[#D4B26F] mb-4 opacity-70 stroke-[1.2]" />
+                  <h3 className="text-2xl font-serif italic mb-2 text-black dark:text-white">Ready for AI Evaluation</h3>
+                  <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs max-w-md mx-auto leading-relaxed mb-6">
+                    Type or paste your response, select a practice preset, and click "Get AI Score & Feedback" to get started.
                   </p>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-lg">
-                    <div className="p-3 bg-white border border-[#DEDCD7] rounded-sm text-center">
-                      <b className="text-[#C5A059] block font-serif italic text-lg">9.0</b>
-                      <span className="text-[9px] text-[#8C8A84] uppercase tracking-wider block">Strict Grading</span>
+                    <div className="p-3 bg-white dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] rounded-sm text-center">
+                      <b className="text-[#C5A059] dark:text-[#D4B26F] block font-serif italic text-lg">9.0</b>
+                      <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider block">Official Standards</span>
                     </div>
-                    <div className="p-3 bg-white border border-[#DEDCD7] rounded-sm text-center">
-                      <TrendingUp className="w-5 h-5 text-[#C5A059] mx-auto mb-1 stroke-[1.5]" />
-                      <span className="text-[9px] text-[#8C8A84] uppercase tracking-wider block">Band Profiler</span>
+                    <div className="p-3 bg-white dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] rounded-sm text-center">
+                      <TrendingUp className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F] mx-auto mb-1 stroke-[1.5]" />
+                      <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider block">Score Estimator</span>
                     </div>
-                    <div className="p-3 bg-white border border-[#DEDCD7] rounded-sm text-center">
-                      <FileCode className="w-5 h-5 text-[#C5A059] mx-auto mb-1 stroke-[1.5]" />
-                      <span className="text-[9px] text-[#8C8A84] uppercase tracking-wider block">JSON matrix</span>
+                    <div className="p-3 bg-white dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] rounded-sm text-center">
+                      <FileCode className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F] mx-auto mb-1 stroke-[1.5]" />
+                      <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider block">Report Data</span>
                     </div>
-                    <div className="p-3 bg-white border border-[#DEDCD7] rounded-sm text-center">
-                      <Languages className="w-5 h-5 text-[#C5A059] mx-auto mb-1 stroke-[1.5]" />
-                      <span className="text-[9px] text-[#8C8A84] uppercase tracking-wider block">Expert Advice</span>
+                    <div className="p-3 bg-white dark:bg-[#181715] border border-[#DEDCD7] dark:border-[#3C3933] rounded-sm text-center">
+                      <Languages className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F] mx-auto mb-1 stroke-[1.5]" />
+                      <span className="text-[9px] text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider block">Coaching Tips</span>
                     </div>
                   </div>
                 </div>
               )}
 
               {isEvaluating && (
-                <div className="bg-white border border-[#DEDCD7] p-12 rounded-sm text-center flex flex-col items-center justify-center min-h-[600px]">
-                  <div className="relative w-24 h-24 mb-6">
-                    <div className="absolute inset-0 border-4 border-[#C5A059]/20 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-t-[#C5A059] rounded-full animate-spin"></div>
+                <div className="flex flex-col gap-6 animate-pulse w-full">
+                  {/* Status Banner */}
+                  <div className="bg-[#C5A059]/10 border border-[#C5A059]/30 p-4 rounded-sm flex items-center justify-between dark:bg-[#C5A059]/5 dark:border-[#C5A059]/20">
+                    <div className="flex items-center gap-3">
+                      <span className="w-4 h-4 border-2 border-[#C5A059] border-t-transparent rounded-full animate-spin"></span>
+                      <span className="text-xs font-bold text-[#1A1A1A] dark:text-white uppercase tracking-wider">AI is scoring your response...</span>
+                    </div>
+                    <span className="text-[9px] font-mono text-[#C5A059] bg-white dark:bg-[#201F1D] px-2 py-0.5 border border-[#C5A059]/30 rounded-sm">POWERED BY GEMINI AI</span>
                   </div>
-                  <h3 className="text-2xl font-serif italic mb-2">Auditing Submission Matrix</h3>
-                  <p className="text-[#8C8A84] text-xs max-w-sm mx-auto leading-relaxed mb-4">
-                    Programmatically parsing spelling patterns, lexical cohesion, grammatical complexity and task relevance against certified IELTS rubrics...
-                  </p>
-                  <div className="text-[10px] font-mono text-[#8C8A84] bg-[#F0EFEC] px-3 py-1.5 rounded-sm">
-                    GEMINI-3.5-FLASH // SCORING_MODEL_ACTIVE
+
+                  {/* Header Skeleton */}
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-8 rounded-sm shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                      <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F0EFEC] dark:bg-[#2C2A26] shrink-0"></div>
+                      <div className="flex flex-col gap-2">
+                        <div className="h-3.5 w-16 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-6 w-48 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-3 w-36 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                      </div>
+                    </div>
+                    <div className="h-9 w-24 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm shrink-0"></div>
+                  </div>
+
+                  {/* Bento Grid Skeletons */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="h-3 w-28 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                              <div className="h-2.5 w-16 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                            </div>
+                            <div className="w-12 h-12 rounded-full bg-[#F0EFEC] dark:bg-[#2C2A26] shrink-0"></div>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <div className="h-2.5 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                            <div className="h-2.5 w-5/6 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                            <div className="h-2.5 w-4/5 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Inspector Skeletons */}
+                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    <div className="xl:col-span-7 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm min-h-[300px] flex flex-col gap-3">
+                      <div className="h-3.5 w-32 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                      <div className="h-full bg-[#F9F8F6] dark:bg-[#181715] border border-[#EBE9E4] dark:border-[#2C2A26] p-4 flex flex-col gap-2 rounded-sm flex-1">
+                        <div className="h-3 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-3 w-11/12 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-3 w-5/6 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-3 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                      </div>
+                    </div>
+                    <div className="xl:col-span-5 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm min-h-[300px] flex flex-col gap-3">
+                      <div className="h-3.5 w-36 bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                      <div className="flex flex-col gap-2 flex-1 justify-between py-2">
+                        <div className="h-12 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-12 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                        <div className="h-12 w-full bg-[#F0EFEC] dark:bg-[#2C2A26] rounded-sm"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -803,20 +1054,20 @@ export default function App() {
                 <div className="flex flex-col gap-6 animate-fade-in">
                   
                   {/* Results Overview: Overall score & metadata */}
-                  <div className="bg-white border border-[#DEDCD7] p-8 rounded-sm shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-8 rounded-sm shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all duration-200">
                     <div className="flex items-center gap-6">
-                      <div className="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-[#C5A059] flex flex-col items-center justify-center bg-white shadow-md shrink-0">
-                        <span className="text-4xl md:text-5xl font-serif font-bold italic tracking-tighter text-black">
+                      <div className="w-24 h-24 md:w-28 md:h-28 rounded-full border-4 border-[#C5A059] dark:border-[#D4B26F] flex flex-col items-center justify-center bg-white dark:bg-[#181715] shadow-md shrink-0">
+                        <span className="text-4xl md:text-5xl font-serif font-bold italic tracking-tighter text-black dark:text-white">
                           {currentResult.overallBand.toFixed(1)}
                         </span>
-                        <span className="text-[8px] font-mono text-[#C5A059] uppercase font-bold tracking-widest mt-0.5">BAND SCORE</span>
+                        <span className="text-[8px] font-mono text-[#C5A059] dark:text-[#D4B26F] uppercase font-bold tracking-widest mt-0.5">BAND SCORE</span>
                       </div>
                       <div>
-                        <span className="text-[9px] uppercase tracking-widest text-[#8C8A84] bg-[#F0EFEC] px-2 py-0.5 font-bold font-mono">
+                        <span className="text-[9px] uppercase tracking-widest text-[#8C8A84] dark:text-[#A6A49F] bg-[#F0EFEC] dark:bg-[#2C2A26] px-2 py-0.5 font-bold font-mono">
                           ID: {currentResult.id}
                         </span>
-                        <h2 className="text-2xl md:text-3xl font-serif tracking-tight mt-1">Overall Band Evaluation</h2>
-                        <p className="text-[#8C8A84] text-xs mt-0.5">
+                        <h2 className="text-2xl md:text-3xl font-serif tracking-tight mt-1 text-black dark:text-white">Your Band Score Report</h2>
+                        <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs mt-0.5">
                           {getBandDescriptor(currentResult.overallBand)} • {currentResult.timestamp}
                         </p>
                       </div>
@@ -825,18 +1076,18 @@ export default function App() {
                     <div className="flex gap-2 shrink-0 self-end md:self-auto">
                       <button 
                         onClick={copyToClipboard}
-                        className="p-2 border border-[#DEDCD7] hover:border-[#C5A059] text-[#1A1A1A] hover:bg-white text-xs font-semibold flex items-center gap-2 rounded-sm transition-all"
+                        className="p-2 border border-[#DEDCD7] dark:border-[#3C3933] hover:border-[#C5A059] dark:hover:border-[#D4B26F] text-[#1A1A1A] dark:text-white hover:bg-white dark:hover:bg-[#181715] text-xs font-semibold flex items-center gap-2 rounded-sm transition-all"
                         title="Copy machine JSON data"
                       >
-                        {isCopied ? <ClipboardCheck className="w-4 h-4 text-[#C5A059]" /> : <Clipboard className="w-4 h-4" />}
+                        {isCopied ? <ClipboardCheck className="w-4 h-4 text-[#C5A059]" /> : <Clipboard className="w-4 h-4 text-[#8C8A84] dark:text-[#A6A49F]" />}
                         <span className="hidden md:inline">JSON</span>
                       </button>
                       <button 
                         onClick={() => window.print()}
-                        className="p-2 border border-[#DEDCD7] hover:border-[#C5A059] text-[#1A1A1A] hover:bg-white text-xs font-semibold flex items-center gap-2 rounded-sm transition-all"
+                        className="p-2 border border-[#DEDCD7] dark:border-[#3C3933] hover:border-[#C5A059] dark:hover:border-[#D4B26F] text-[#1A1A1A] dark:text-white hover:bg-white dark:hover:bg-[#181715] text-xs font-semibold flex items-center gap-2 rounded-sm transition-all"
                         title="Print official report"
                       >
-                        <Printer className="w-4 h-4" />
+                        <Printer className="w-4 h-4 text-[#8C8A84] dark:text-[#A6A49F]" />
                         <span className="hidden md:inline">Print Report</span>
                       </button>
                     </div>
@@ -846,86 +1097,66 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     
                     {/* TA */}
-                    <div className="bg-white border border-[#DEDCD7] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] transition-colors group">
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-colors group">
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] uppercase font-bold text-[#8C8A84] tracking-widest block">
-                            {currentResult.type === 'writing' ? 'Task Achievement' : 'Task Response'}
-                          </span>
-                          <span className="text-xl font-mono font-bold text-black bg-[#F0EFEC] px-2 py-0.5 rounded-sm">
-                            {currentResult.bandScores.taskAchievement.toFixed(1)}
-                          </span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-widest block">
+                              {currentResult.type === 'writing' ? 'Task Achievement' : 'Task Response'}
+                            </span>
+                            <span className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F] block mt-0.5">Official Score Criteria</span>
+                          </div>
+                          <CircularScore score={currentResult.bandScores.taskAchievement} />
                         </div>
-                        <div className="w-full h-1 bg-[#F0EFEC] mb-3">
-                          <div 
-                            className="h-full bg-[#C5A059] transition-all duration-1000"
-                            style={{ width: `${(currentResult.bandScores.taskAchievement / 9) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-[#555] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
+                        <p className="text-xs text-[#555] dark:text-[#C8C6C2] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
                           {currentResult.metricsFeedback.taskAchievement}
                         </p>
                       </div>
                     </div>
 
                     {/* CC */}
-                    <div className="bg-white border border-[#DEDCD7] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] transition-colors group">
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-colors group">
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] uppercase font-bold text-[#8C8A84] tracking-widest block">Coherence & Cohesion</span>
-                          <span className="text-xl font-mono font-bold text-black bg-[#F0EFEC] px-2 py-0.5 rounded-sm">
-                            {currentResult.bandScores.coherenceCohesion.toFixed(1)}
-                          </span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-widest block">Coherence & Cohesion</span>
+                            <span className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F] block mt-0.5">Official Score Criteria</span>
+                          </div>
+                          <CircularScore score={currentResult.bandScores.coherenceCohesion} />
                         </div>
-                        <div className="w-full h-1 bg-[#F0EFEC] mb-3">
-                          <div 
-                            className="h-full bg-[#C5A059] transition-all duration-1000"
-                            style={{ width: `${(currentResult.bandScores.coherenceCohesion / 9) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-[#555] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
+                        <p className="text-xs text-[#555] dark:text-[#C8C6C2] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
                           {currentResult.metricsFeedback.coherenceCohesion}
                         </p>
                       </div>
                     </div>
 
                     {/* LR */}
-                    <div className="bg-white border border-[#DEDCD7] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] transition-colors group">
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-colors group">
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] uppercase font-bold text-[#8C8A84] tracking-widest block">Lexical Resource</span>
-                          <span className="text-xl font-mono font-bold text-black bg-[#F0EFEC] px-2 py-0.5 rounded-sm">
-                            {currentResult.bandScores.lexicalResource.toFixed(1)}
-                          </span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-widest block">Lexical Resource</span>
+                            <span className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F] block mt-0.5">Official Score Criteria</span>
+                          </div>
+                          <CircularScore score={currentResult.bandScores.lexicalResource} />
                         </div>
-                        <div className="w-full h-1 bg-[#F0EFEC] mb-3">
-                          <div 
-                            className="h-full bg-[#C5A059] transition-all duration-1000"
-                            style={{ width: `${(currentResult.bandScores.lexicalResource / 9) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-[#555] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
+                        <p className="text-xs text-[#555] dark:text-[#C8C6C2] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
                           {currentResult.metricsFeedback.lexicalResource}
                         </p>
                       </div>
                     </div>
 
                     {/* GRA */}
-                    <div className="bg-white border border-[#DEDCD7] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] transition-colors group">
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-5 rounded-sm shadow-sm flex flex-col justify-between hover:border-[#C5A059] dark:hover:border-[#D4B26F] transition-colors group">
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] uppercase font-bold text-[#8C8A84] tracking-widest block font-sans">Grammatical Range</span>
-                          <span className="text-xl font-mono font-bold text-black bg-[#F0EFEC] px-2 py-0.5 rounded-sm">
-                            {currentResult.bandScores.grammaticalRange.toFixed(1)}
-                          </span>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-[#8C8A84] dark:text-[#A6A49F] tracking-widest block font-sans">Grammatical Range</span>
+                            <span className="text-[10px] text-[#8C8A84] dark:text-[#A6A49F] block mt-0.5">Official Score Criteria</span>
+                          </div>
+                          <CircularScore score={currentResult.bandScores.grammaticalRange} />
                         </div>
-                        <div className="w-full h-1 bg-[#F0EFEC] mb-3">
-                          <div 
-                            className="h-full bg-[#C5A059] transition-all duration-1000"
-                            style={{ width: `${(currentResult.bandScores.grammaticalRange / 9) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-[#555] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
+                        <p className="text-xs text-[#555] dark:text-[#C8C6C2] leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all">
                           {currentResult.metricsFeedback.grammaticalRange}
                         </p>
                       </div>
@@ -937,17 +1168,17 @@ export default function App() {
                   <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                     
                     {/* Left: Annotated Text Viewer */}
-                    <div className="xl:col-span-7 bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm flex flex-col">
-                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4 border-b border-[#F0EFEC] pb-2">
-                        Annotated Text Inspector
+                    <div className="xl:col-span-7 bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm flex flex-col transition-all duration-200">
+                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4 border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 text-black dark:text-white">
+                        Correction Markup
                       </h3>
-                      <div className="bg-[#F9F8F6] p-4 rounded-sm border border-[#EBE9E4] flex-1 max-h-[450px] overflow-y-auto">
+                      <div className="bg-[#F9F8F6] dark:bg-[#181715] p-4 rounded-sm border border-[#EBE9E4] dark:border-[#3C3933] flex-1 max-h-[450px] overflow-y-auto text-black dark:text-white">
                         {renderHighlightedText()}
                       </div>
-                      <div className="flex gap-4 mt-3 text-[10px] text-[#8C8A84]">
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-red-100 border border-red-300 inline-block rounded-full"></span> High Severity</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-100 border border-amber-300 inline-block rounded-full"></span> Medium Correction</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-yellow-50 border border-yellow-200 inline-block rounded-full"></span> Minor/Suggestion</span>
+                      <div className="flex gap-4 mt-3 text-[10px] text-[#8C8A84] dark:text-[#A6A49F]">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-red-100 dark:bg-red-950/40 border border-red-300 dark:border-red-900 inline-block rounded-full"></span> Critical Errors</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-900 inline-block rounded-full"></span> Grammar & Style Tips</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-200 dark:border-yellow-900 inline-block rounded-full"></span> Word Choice Tips</span>
                       </div>
                     </div>
 
@@ -955,7 +1186,7 @@ export default function App() {
                     <div className="xl:col-span-5 bg-[#1A1A1A] p-6 rounded-sm shadow-lg text-white flex flex-col justify-between max-h-[550px]">
                       <div>
                         <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-                          <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059]">Correction Matrix</h3>
+                          <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059]">Sentence Corrections</h3>
                           <span className="text-[9px] font-mono text-white/40 uppercase">Interactive Log</span>
                         </div>
 
@@ -997,14 +1228,14 @@ export default function App() {
                             })
                           ) : (
                             <div className="text-center py-12 text-white/40 text-xs italic">
-                              No grammatical or spelling corrections required. Outstanding structural precision!
+                              Great job! No spelling or grammar corrections needed.
                             </div>
                           )}
                         </div>
                       </div>
 
                       <div className="pt-4 border-t border-white/10 text-right">
-                        <span className="text-[9px] font-mono text-white/30 uppercase">EXPORT MATRIX AS COMPLIANT JSON</span>
+                        <span className="text-[9px] font-mono text-white/30 uppercase">EXPORT REPORT DATA</span>
                       </div>
                     </div>
 
@@ -1013,14 +1244,14 @@ export default function App() {
                   {/* Strengths, Weaknesses, and Actionable Steps (Bento Style Grid) */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Strengths */}
-                    <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-green-700 mb-4 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-green-600" /> Prominent Strengths
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-green-700 dark:text-green-400 mb-4 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" /> Key Strengths
                       </h3>
                       <ul className="space-y-3">
                         {currentResult.strengths?.map((str, index) => (
-                          <li key={index} className="text-xs text-[#444] leading-relaxed flex items-start gap-2.5">
-                            <span className="font-mono text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-sm mt-0.5">+{index+1}</span>
+                          <li key={index} className="text-xs text-[#444] dark:text-[#C8C6C2] leading-relaxed flex items-start gap-2.5">
+                            <span className="font-mono text-[10px] text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-950/20 px-1.5 py-0.5 rounded-sm mt-0.5">+{index+1}</span>
                             <span>{str}</span>
                           </li>
                         ))}
@@ -1028,14 +1259,14 @@ export default function App() {
                     </div>
 
                     {/* Weaknesses */}
-                    <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700 mb-4 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600" /> Primary Impediments
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700 dark:text-amber-400 mb-4 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" /> Areas for Improvement
                       </h3>
                       <ul className="space-y-3">
                         {currentResult.weaknesses?.map((weak, index) => (
-                          <li key={index} className="text-xs text-[#444] leading-relaxed flex items-start gap-2.5">
-                            <span className="font-mono text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-sm mt-0.5">-{index+1}</span>
+                          <li key={index} className="text-xs text-[#444] dark:text-[#C8C6C2] leading-relaxed flex items-start gap-2.5">
+                            <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded-sm mt-0.5">-{index+1}</span>
                             <span>{weak}</span>
                           </li>
                         ))}
@@ -1043,14 +1274,14 @@ export default function App() {
                     </div>
 
                     {/* Actionable Steps */}
-                    <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] mb-4 flex items-center gap-2">
-                        <ArrowRight className="w-4 h-4 text-[#C5A059]" /> Remedial Action Plan
+                    <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                      <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#C5A059] dark:text-[#D4B26F] mb-4 flex items-center gap-2">
+                        <ArrowRight className="w-4 h-4 text-[#C5A059] dark:text-[#D4B26F]" /> Step-by-Step Action Plan
                       </h3>
                       <ol className="space-y-3">
                         {currentResult.actionableAdvice?.map((advice, index) => (
-                          <li key={index} className="text-xs text-[#444] leading-relaxed flex items-start gap-2.5">
-                            <span className="font-mono text-[10px] bg-[#F0EFEC] text-black font-bold px-1.5 py-0.5 rounded-sm mt-0.5">{index+1}</span>
+                          <li key={index} className="text-xs text-[#444] dark:text-[#C8C6C2] leading-relaxed flex items-start gap-2.5">
+                            <span className="font-mono text-[10px] bg-[#F0EFEC] dark:bg-[#2C2A26] text-black dark:text-white font-bold px-1.5 py-0.5 rounded-sm mt-0.5">{index+1}</span>
                             <span>{advice}</span>
                           </li>
                         ))}
@@ -1068,25 +1299,25 @@ export default function App() {
         {/* PORTFOLIO / HISTORY TAB */}
         {activeTab === 'history' && (
           <div className="col-span-12 flex flex-col gap-6">
-            <div className="bg-white border border-[#DEDCD7] p-8 rounded-sm shadow-sm">
-              <h2 className="text-2xl font-serif italic mb-2">Audit Dossier Portfolio</h2>
-              <p className="text-[#8C8A84] text-xs">
-                History of your diagnostic evaluations. All records are saved securely inside your browser's local cache.
+            <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-8 rounded-sm shadow-sm transition-all duration-200">
+              <h2 className="text-2xl font-serif italic mb-2 text-black dark:text-white">Saved Practice Reports</h2>
+              <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs">
+                Your practice history. All reports are saved securely inside your browser's local storage.
               </p>
             </div>
 
             {historyList.length === 0 ? (
-              <div className="bg-white border border-[#DEDCD7] p-16 text-center rounded-sm">
-                <Layers className="w-12 h-12 text-[#C5A059]/40 mx-auto mb-4" />
-                <h3 className="text-lg font-serif italic mb-1">Your Portfolio is Empty</h3>
-                <p className="text-[#8C8A84] text-xs mb-6">
-                  You haven't run any diagnostic checks yet. Complete your first practice response audit to begin tracking your band scores.
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-16 text-center rounded-sm transition-all duration-200">
+                <Layers className="w-12 h-12 text-[#C5A059]/40 dark:text-[#D4B26F]/40 mx-auto mb-4" />
+                <h3 className="text-lg font-serif italic mb-1 text-black dark:text-white">Your Portfolio is Empty</h3>
+                <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs mb-6">
+                  You haven't run any AI practice tests yet. Complete your first evaluation to start tracking your band scores.
                 </p>
                 <button 
                   onClick={() => setActiveTab('evaluate')}
-                  className="px-6 py-3 bg-[#1A1A1A] text-white text-xs uppercase tracking-widest font-bold hover:bg-[#2A2A2A]"
+                  className="px-6 py-3 bg-[#1A1A1A] dark:bg-[#D4B26F] hover:bg-[#2A2A2A] dark:hover:bg-[#c3a160] text-white dark:text-[#181715] text-xs uppercase tracking-widest font-bold transition-all"
                 >
-                  Create First Evaluation
+                  Start Practice Test
                 </button>
               </div>
             ) : (
@@ -1098,32 +1329,32 @@ export default function App() {
                       setCurrentResult(item);
                       setActiveTab('evaluate');
                     }}
-                    className="bg-white border border-[#DEDCD7] hover:border-[#C5A059] p-6 rounded-sm shadow-sm transition-all cursor-pointer flex flex-col justify-between min-h-[240px]"
+                    className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] hover:border-[#C5A059] dark:hover:border-[#D4B26F] p-6 rounded-sm shadow-sm transition-all cursor-pointer flex flex-col justify-between min-h-[240px]"
                   >
                     <div>
-                      <div className="flex items-center justify-between mb-3 border-b border-[#F0EFEC] pb-2">
-                        <span className="text-[10px] font-mono text-[#8C8A84] uppercase tracking-wider">{item.timestamp}</span>
-                        <span className="text-[10px] font-mono bg-[#F0EFEC] px-2 py-0.5 rounded-sm uppercase tracking-wider text-black font-bold">
+                      <div className="flex items-center justify-between mb-3 border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2">
+                        <span className="text-[10px] font-mono text-[#8C8A84] dark:text-[#A6A49F] uppercase tracking-wider">{item.timestamp}</span>
+                        <span className="text-[10px] font-mono bg-[#F0EFEC] dark:bg-[#2C2A26] px-2 py-0.5 rounded-sm uppercase tracking-wider text-black dark:text-white font-bold">
                           {item.type} ({item.taskType})
                         </span>
                       </div>
-                      <h4 className="font-serif italic text-lg leading-snug line-clamp-2 mb-2">&ldquo;{item.promptText}&rdquo;</h4>
-                      <p className="text-xs text-[#555] line-clamp-3 mb-4 italic">&ldquo;{item.submissionText}&rdquo;</p>
+                      <h4 className="font-serif italic text-lg leading-snug line-clamp-2 mb-2 text-black dark:text-white">&ldquo;{item.promptText}&rdquo;</h4>
+                      <p className="text-xs text-[#555] dark:text-[#C8C6C2] line-clamp-3 mb-4 italic">&ldquo;{item.submissionText}&rdquo;</p>
                     </div>
 
-                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-[#F0EFEC]">
+                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-[#F0EFEC] dark:border-[#3C3933]">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs uppercase tracking-wider text-[#8C8A84] font-bold">Score:</span>
-                        <span className="font-serif font-bold text-[#C5A059] text-xl italic">{item.overallBand.toFixed(1)}</span>
+                        <span className="text-xs uppercase tracking-wider text-[#8C8A84] dark:text-[#A6A49F] font-bold">Score:</span>
+                        <span className="font-serif font-bold text-[#C5A059] dark:text-[#D4B26F] text-xl italic">{item.overallBand.toFixed(1)}</span>
                       </div>
                       <div className="flex gap-2">
                         <button 
                           onClick={(e) => deleteFromHistory(item.id, e)}
-                          className="px-2.5 py-1 text-[10px] uppercase font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-sm border border-red-200"
+                          className="px-2.5 py-1 text-[10px] uppercase font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-sm border border-red-200 dark:border-red-900/50"
                         >
                           Delete
                         </button>
-                        <span className="px-2.5 py-1 text-[10px] uppercase font-bold bg-[#1A1A1A] text-white rounded-sm">View</span>
+                        <span className="px-2.5 py-1 text-[10px] uppercase font-bold bg-[#1A1A1A] dark:bg-[#3C3933] text-white dark:text-[#C8C6C2] rounded-sm">View</span>
                       </div>
                     </div>
                   </div>
@@ -1136,109 +1367,109 @@ export default function App() {
         {/* IELTS RUBRICS TAB */}
         {activeTab === 'rubric' && (
           <div className="col-span-12 flex flex-col gap-8">
-            <div className="bg-white border border-[#DEDCD7] p-8 rounded-sm shadow-sm">
-              <h2 className="text-2xl font-serif italic mb-2">Official IELTS Scoring Rubrics Reference</h2>
-              <p className="text-[#8C8A84] text-xs">
-                Detailed public descriptors of IELTS bands for task achievement, coherence, vocabulary, and grammar.
+            <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-8 rounded-sm shadow-sm transition-all duration-200">
+              <h2 className="text-2xl font-serif italic mb-2 text-black dark:text-white">Official IELTS Band Descriptors Guide</h2>
+              <p className="text-[#8C8A84] dark:text-[#A6A49F] text-xs">
+                Official public descriptors for IELTS bands: Task Achievement, Coherence & Cohesion, Vocabulary, and Grammar.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Task Achievement */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] pb-2 mb-4 text-[#C5A059] font-bold flex items-center gap-2">
-                  <Check className="w-5 h-5 text-[#C5A059]" /> Task Achievement (Task 1) / Response (Task 2)
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold flex items-center gap-2">
+                  <Check className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F]" /> Task Achievement (Task 1) / Response (Task 2)
                 </h3>
-                <div className="space-y-4 text-xs leading-relaxed text-[#555]">
+                <div className="space-y-4 text-xs leading-relaxed text-[#555] dark:text-[#C8C6C2]">
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 9.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 9.0</h4>
                     <p>Fully addresses all the requirements of the task. Presents a fully developed response to the question with detailed, fully substantiated ideas.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 8.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 8.0</h4>
                     <p>Sufficiently addresses all requirements. Presents a well-developed response to the question with relevant, extended and supported ideas.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 7.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 7.0</h4>
                     <p>Addresses all parts of the task. Presents a clear position throughout. Presents, extends and supports key ideas, but there may be a tendency to over-generalise.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 6.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 6.0</h4>
                     <p>Addresses all parts of the task, though some parts may be more fully covered than others. Presents a relevant position, though conclusions may be unclear or repetitive.</p>
                   </div>
                 </div>
               </div>
 
               {/* Coherence & Cohesion */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] pb-2 mb-4 text-[#C5A059] font-bold flex items-center gap-2">
-                  <Check className="w-5 h-5 text-[#C5A059]" /> Coherence and Cohesion
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold flex items-center gap-2">
+                  <Check className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F]" /> Coherence and Cohesion
                 </h3>
-                <div className="space-y-4 text-xs leading-relaxed text-[#555]">
+                <div className="space-y-4 text-xs leading-relaxed text-[#555] dark:text-[#C8C6C2]">
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 9.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 9.0</h4>
                     <p>Uses cohesion in such a way that it attracts no attention. Skilfully manages paragraphing throughout the response.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 8.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 8.0</h4>
                     <p>Sequences information and ideas logically. Manages all aspects of cohesion well. Uses paragraphing sufficiently and appropriately.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 7.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 7.0</h4>
                     <p>Logically organises information and ideas; there is clear progression throughout. Uses a range of cohesive devices appropriately, though there may be some under-/over-use.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 6.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 6.0</h4>
                     <p>Coherently organises information and ideas; there is clear overall progression. Uses cohesive devices effectively, but cohesion within/between sentences may be faulty.</p>
                   </div>
                 </div>
               </div>
 
               {/* Lexical Resource */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] pb-2 mb-4 text-[#C5A059] font-bold flex items-center gap-2">
-                  <Check className="w-5 h-5 text-[#C5A059]" /> Lexical Resource (Vocabulary)
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold flex items-center gap-2">
+                  <Check className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F]" /> Lexical Resource (Vocabulary)
                 </h3>
-                <div className="space-y-4 text-xs leading-relaxed text-[#555]">
+                <div className="space-y-4 text-xs leading-relaxed text-[#555] dark:text-[#C8C6C2]">
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 9.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 9.0</h4>
                     <p>Uses a wide range of vocabulary with very natural and sophisticated control of lexical features; rare minor errors occur only as 'slips'.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 8.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 8.0</h4>
                     <p>Uses a wide range of vocabulary fluently and flexibly to convey precise meanings. Skilfully uses uncommon lexical items with rare inaccuracies in collocation/spelling.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 7.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 7.0</h4>
                     <p>Uses a sufficient range of vocabulary to allow some flexibility and precision. Uses less common lexical items with some awareness of style and collocation.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 6.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 6.0</h4>
                     <p>Uses an adequate range of vocabulary for the task. Attempts to use less common vocabulary but with some inaccuracy. Makes some spelling/word-formation errors.</p>
                   </div>
                 </div>
               </div>
 
               {/* Grammatical Range */}
-              <div className="bg-white border border-[#DEDCD7] p-6 rounded-sm shadow-sm">
-                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] pb-2 mb-4 text-[#C5A059] font-bold flex items-center gap-2">
-                  <Check className="w-5 h-5 text-[#C5A059]" /> Grammatical Range and Accuracy
+              <div className="bg-white dark:bg-[#201F1D] border border-[#DEDCD7] dark:border-[#3C3933] p-6 rounded-sm shadow-sm transition-all duration-200">
+                <h3 className="text-md font-serif italic border-b border-[#F0EFEC] dark:border-[#3C3933] pb-2 mb-4 text-[#C5A059] dark:text-[#D4B26F] font-bold flex items-center gap-2">
+                  <Check className="w-5 h-5 text-[#C5A059] dark:text-[#D4B26F]" /> Grammatical Range and Accuracy
                 </h3>
-                <div className="space-y-4 text-xs leading-relaxed text-[#555]">
+                <div className="space-y-4 text-xs leading-relaxed text-[#555] dark:text-[#C8C6C2]">
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 9.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 9.0</h4>
                     <p>Uses a wide range of structures with full flexibility and accuracy; rare minor errors occur only as 'slips'.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 8.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 8.0</h4>
                     <p>Uses a wide range of structures. The majority of sentences are error-free. Makes only very occasional grammar or punctuation errors.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 7.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 7.0</h4>
                     <p>Uses a variety of complex structures. Produces frequent error-free sentences. Has good control of grammar and punctuation but may make a few errors.</p>
                   </div>
                   <div>
-                    <h4 className="font-bold text-black font-mono">BAND 6.0</h4>
+                    <h4 className="font-bold text-black dark:text-white font-mono">BAND 6.0</h4>
                     <p>Uses a mix of simple and complex structures. Makes some errors in grammar and punctuation but they rarely reduce communication overall.</p>
                   </div>
                 </div>
@@ -1250,14 +1481,14 @@ export default function App() {
       </main>
 
       {/* Platform Footer */}
-      <footer className="h-16 border-t border-[#DEDCD7] bg-white flex flex-col md:flex-row items-center px-6 md:px-12 justify-between gap-2 py-3">
-        <p className="text-[9px] uppercase tracking-widest text-[#8C8A84] text-center md:text-left">
-          © {new Date().getFullYear()} Global IELTS Analytics Engine. Certified scoring matrix algorithm v2.4.
+      <footer className="h-16 border-t border-[#DEDCD7] dark:border-[#3C3933] bg-white dark:bg-[#201F1D] flex flex-col md:flex-row items-center px-6 md:px-12 justify-between gap-2 py-3 transition-all duration-200">
+        <p className="text-[9px] uppercase tracking-widest text-[#8C8A84] dark:text-[#A6A49F] text-center md:text-left">
+          © {new Date().getFullYear()} IELTS Smart Practice AI v2.4. Learn smarter, score higher.
         </p>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-[9px] uppercase tracking-widest text-[#1A1A1A] font-bold font-mono">System: Operational</span>
+            <span className="text-[9px] uppercase tracking-widest text-[#1A1A1A] dark:text-white font-bold font-mono">All Systems Online</span>
           </div>
         </div>
       </footer>
