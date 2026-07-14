@@ -155,8 +155,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'evaluate' | 'history' | 'rubric'>('evaluate');
   const [type, setType] = useState<'writing' | 'speaking'>('writing');
   const [taskType, setTaskType] = useState<string>('task2');
-  const [promptText, setPromptText] = useState<string>('');
-  const [submissionText, setSubmissionText] = useState<string>('');
+  const [promptText, setPromptText] = useState<string>('Should universities focus on vocational training or academic theory?');
+  const [submissionText, setSubmissionText] = useState<string>('Universities play a vital role in society by shaping the minds of young professionals. It is argued that higher education should focus purely on vocational training, while others believe academic knowledge is more valuable. In this essay, I will explore both sides and support the view that a hybrid approach is essential.');
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
